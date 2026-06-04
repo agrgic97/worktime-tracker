@@ -9,6 +9,7 @@ type DayEntry = {
 }
 
 const apiBase = 'http://localhost:8080'
+const maxWeeklyHours = 39
 const today = new Date()
 const form = reactive({
   year: today.getFullYear(),
@@ -32,6 +33,38 @@ const monthLabel = computed(() =>
 const totalHours = computed(() =>
   entries.value.reduce((sum, entry) => sum + parseGermanNumber(entry.hours), 0),
 )
+
+const weeklyTotals = computed(() => {
+  const totals = new Map<string, { label: string; hours: number }>()
+
+  for (const entry of entries.value) {
+    const date = new Date(`${entry.date}T00:00:00`)
+    const key = getWeekStartIso(date)
+    const existing = totals.get(key)
+    const label = `Woche ab ${formatDisplayDate(key)}`
+    totals.set(key, {
+      label,
+      hours: (existing?.hours ?? 0) + parseGermanNumber(entry.hours),
+    })
+  }
+
+  return Array.from(totals.values())
+})
+
+const weeklyLimitViolations = computed(() =>
+  weeklyTotals.value.filter((week) => week.hours > maxWeeklyHours),
+)
+
+const hasWeeklyLimitViolation = computed(() => weeklyLimitViolations.value.length > 0)
+
+const weeklyLimitMessage = computed(() => {
+  if (!hasWeeklyLimitViolation.value) return ''
+
+  const weeks = weeklyLimitViolations.value
+    .map((week) => `${week.label}: ${formatHours(week.hours)} h`)
+    .join(', ')
+  return `39 Wochenstunden dürfen nicht überschritten werden. Bitte korrigiere: ${weeks}.`
+})
 
 function rebuildEntries() {
   const previous = new Map(entries.value.map((entry) => [entry.date, entry]))
@@ -58,7 +91,7 @@ function fillWeekdays() {
     const date = new Date(`${entry.date}T00:00:00`)
     const weekday = date.getDay()
     if (weekday !== 0 && weekday !== 6) {
-      entry.hours = '8,00'
+      entry.hours = getAutoFillHours(weekday)
       entry.project = form.defaultProject
     }
   }
@@ -72,6 +105,11 @@ function clearMonth() {
 }
 
 async function downloadPdf() {
+  if (hasWeeklyLimitViolation.value) {
+    status.value = weeklyLimitMessage.value
+    return
+  }
+
   isGenerating.value = true
   status.value = ''
 
@@ -115,6 +153,10 @@ function parseGermanNumber(value: string) {
   return Number.isFinite(parsed) ? parsed : 0
 }
 
+function getAutoFillHours(weekday: number) {
+  return weekday === 5 ? '7,00' : '8,00'
+}
+
 function formatIsoDate(date: Date) {
   const year = date.getFullYear()
   const month = String(date.getMonth() + 1).padStart(2, '0')
@@ -125,6 +167,18 @@ function formatIsoDate(date: Date) {
 function formatDisplayDate(iso: string) {
   const [year, month, day] = iso.split('-')
   return `${day}.${month}.${year}`
+}
+
+function formatHours(hours: number) {
+  return hours.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
+function getWeekStartIso(date: Date) {
+  const weekStart = new Date(date)
+  const weekday = weekStart.getDay()
+  const daysSinceMonday = weekday === 0 ? 6 : weekday - 1
+  weekStart.setDate(weekStart.getDate() - daysSinceMonday)
+  return formatIsoDate(weekStart)
 }
 
 function isWeekend(iso: string) {
@@ -145,7 +199,7 @@ watch(() => [form.year, form.month], rebuildEntries, { immediate: true })
       <div class="actions">
         <button type="button" class="secondary" @click="fillWeekdays">Werktage füllen</button>
         <button type="button" class="secondary" @click="clearMonth">Leeren</button>
-        <button type="button" :disabled="isGenerating" @click="downloadPdf">
+        <button type="button" :disabled="isGenerating || hasWeeklyLimitViolation" @click="downloadPdf">
           {{ isGenerating ? 'Erstelle PDF...' : 'PDF herunterladen' }}
         </button>
       </div>
@@ -191,8 +245,11 @@ watch(() => [form.year, form.month], rebuildEntries, { immediate: true })
     <section class="sheet">
       <div class="sheet-header">
         <strong>Monatsstunden</strong>
-        <span>{{ totalHours.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }} h</span>
+        <span>{{ formatHours(totalHours) }} h</span>
       </div>
+      <p v-if="hasWeeklyLimitViolation" class="limit-warning" role="alert">
+        {{ weeklyLimitMessage }}
+      </p>
       <div class="table">
         <div class="table-row table-head">
           <span>Datum</span>
@@ -212,4 +269,3 @@ watch(() => [form.year, form.month], rebuildEntries, { immediate: true })
     <p class="status" role="status">{{ status }}</p>
   </main>
 </template>
-
