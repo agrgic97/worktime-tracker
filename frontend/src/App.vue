@@ -8,7 +8,7 @@ type DayEntry = {
   project: string
 }
 
-const apiBase = 'http://localhost:8080'
+const apiBase = import.meta.env.VITE_API_BASE_URL ?? ''
 const maxWeeklyHours = 39
 const today = new Date()
 const form = reactive({

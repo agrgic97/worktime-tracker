@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/timesheets")
-@CrossOrigin(origins = "http://localhost:5173")
+@CrossOrigin(origins = "${app.cors.allowed-origins:http://localhost:5173}")
 public class TimesheetController {
     private final TimesheetPdfService pdfService;
     private final TimesheetRequestValidator requestValidator;
