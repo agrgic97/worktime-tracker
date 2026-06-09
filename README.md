@@ -17,6 +17,13 @@ cd backend
 mvn spring-boot:run
 ```
 
+By default the app is protected with HTTP Basic Auth using `admin` /
+`change-me`. Override the credentials before running locally or in production:
+
+```bash
+BASIC_AUTH_USERNAME=my-user BASIC_AUTH_PASSWORD=my-secret mvn spring-boot:run
+```
+
 Frontend:
 
 ```bash
@@ -55,6 +62,10 @@ Then open `http://localhost:8080`.
 For a hosted deployment, push this repository to GitHub and connect it to a
 container-capable platform such as Fly.io, Render, Railway, or a VPS running
 Docker Compose behind Caddy/Traefik for HTTPS.
+
+Set `BASIC_AUTH_USERNAME` and `BASIC_AUTH_PASSWORD` in the deployment
+environment. `/actuator/health` remains publicly reachable for platform health
+checks.
 
 ## PDF behavior
 
